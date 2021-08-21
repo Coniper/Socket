@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #define BUFSZ 128
+#define ERR_LOG(LOG,connfd)    do{perror(LOG); close(connfd); break;}while(0)   
 
 int main(int argc, char *argv[])
 {
@@ -58,7 +59,7 @@ int main(int argc, char *argv[])
     while(1)
     {
         printf("wait for a client\n");
-        
+
         //4、阻塞等待，接受客户端的接连(从缓冲队列中出队客户端请求，建立好连接)
         int connfd = accept(sockfd, (struct sockaddr *)&cli_addr, &cli_len);
         if(0 > connfd)
@@ -71,14 +72,13 @@ int main(int argc, char *argv[])
         while(1)
         {
             int ret = 0;
-            bzero(buf, sizeof(buf));
-            
+            bzero(buf, sizeof(buf));    //memset亦可
+
             //5、数据交互
+#if 0
             if(-1 == (ret = read(connfd, buf, sizeof(buf))))
             {
-                perror("read");
-                close(connfd);
-                break;
+                ERR_LOG("read", connfd);
             }
             else if(ret == 0)
             {
@@ -86,25 +86,50 @@ int main(int argc, char *argv[])
                 close(connfd);
                 break;
             }
-            else if(NULL != strstr(buf, "quit"))
+            else if(NULL != strstr(buf, "quit"))    //strstr:字符串查找 //strcmp:字符串比较
             {
+                printf("client request to leave\n");
                 close(connfd);
                 break;
             }
-            
-            printf("%s\n", buf);
-        
-            memset(buf, 0, sizeof(buf));
+            else
+            {
+                printf("%s\n", buf);
+            }
+
             printf("input: ");
-            fgets(buf, sizeof(buf), stdin);
-            
+            fgets(buf, sizeof(buf), stdin); 
+            //fgets从stdin获取数据后会在末尾置'\0'，write发送时，使用的是strlen，估计垃圾数据不会发送
+
             if(-1 == write(connfd, buf, strlen(buf)))
             {
-                perror("write");
-                close(connfd);
-                break;
+                ERR_LOG("write", connfd);
             }
+#endif
+            ret = recv(connfd, buf, sizeof(buf), 0);    //最后一个参数 0表示网络无数据就阻塞
+            if(-1 == ret)
+            {
+                perror("recv");
+                return -1;
+            }
+            else if(0 == ret)
+            {
+                printf("client already leaving\n");
+                break;
+            } 
+            else 
+            {
+                printf("recv: %s\n", buf);
+                if (strstr(buf, "quit") != NULL)       //字符串的查找函数，没有找到返回 NULL
+                    break;
+            }
+
+            printf("input: ");
+            fgets(buf, sizeof(buf), stdin);
+            send(connfd, buf, strlen(buf), 0);
+            printf("send success\n");
         }
+        close(connfd);
     }
 
     //6、关闭套接字
