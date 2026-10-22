@@ -1,0 +1,11 @@
+# Local C builds
+a.out
+*.o
+*.obj
+*.out
+build/
+
+# Temporary files
+*.swp
+*~
+.DS_Store
